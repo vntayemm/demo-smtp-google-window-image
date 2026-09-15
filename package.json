@@ -32,6 +32,12 @@
     "docker:up:windows": "npm run docker:zones:up && npm run docker:data:up && npm run docker:platform:up && npm run docker:backend:up && npm run docker:frontend:up",
     "docker:up:linux": "npm run docker:zones:up && npm run docker:data:up && npm run docker:platform:up && npm run docker:backend:linux:up && npm run docker:frontend:linux:up",
     "docker:down": "npm run docker:frontend:down && npm run docker:backend:down && npm run docker:platform:down && npm run docker:data:down && npm run docker:zones:down",
+    "image:build:linux": "node docker/scripts/build-push-images.js --platform linux",
+    "image:build:windows": "node docker/scripts/build-push-images.js --platform windows",
+    "image:build-push:linux": "node docker/scripts/build-push-images.js --platform linux --push",
+    "image:build-push:windows": "node docker/scripts/build-push-images.js --platform windows --push",
+    "image:build-push:ps1": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Build-Push-Images.ps1 -Push",
+    "docker:pull:up": "docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml pull && docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml up -d && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.yml pull && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.yml up -d",
     "env:dev": "node -e \"require('fs').copyFileSync('.env.example','.env'); console.log('Wrote .env from .env.example (MailDev)')\"",
     "env:production": "node -e \"require('fs').copyFileSync('.env.production.example','.env'); console.log('Wrote .env from .env.production.example (CMIT relay)')\""
   },

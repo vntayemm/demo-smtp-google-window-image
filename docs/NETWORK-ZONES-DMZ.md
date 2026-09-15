@@ -44,7 +44,7 @@ Browser → `frontend:5173` → `/api/*` proxy trên **zone-frontend** → `gate
 ```powershell
 # Docker Desktop / Server: Switch to Windows containers
 $env:DOCKER_NETWORK_DRIVER = "nat"
-$env:WINDOWS_BASE = "node:20-windowsservercore-ltsc2022"  # hoặc ltsc2025 khớp host build
+$env:WINDOWS_BASE = "mcr.microsoft.com/windows/servercore:ltsc2019"  # Server 2022: ltsc2022
 $env:WINDOWS_ISOLATION = "process"
 
 npm run docker:zones:up

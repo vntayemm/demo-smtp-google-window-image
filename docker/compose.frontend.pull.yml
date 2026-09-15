@@ -1,0 +1,24 @@
+# Server: pull frontend image (không build)
+#   IMAGE_BASE=... IMAGE_TAG=... docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.yml up -d
+
+name: frontend
+
+networks:
+  zone-frontend:
+    external: true
+    name: zone-frontend
+
+services:
+  web:
+    container_name: frontend-web
+    image: ${IMAGE_BASE:-registry.portlogics.com.vn/demo-smtp/linux}/frontend-web:${IMAGE_TAG:-demo}
+    pull_policy: always
+    restart: unless-stopped
+    networks: [zone-frontend]
+    environment:
+      DEMO_GATEWAY: ${DEMO_GATEWAY:-}
+      GATEWAY_PROXY_HOST: gateway
+      GATEWAY_PROXY_PORT: "7080"
+      PORT: "8080"
+    ports:
+      - "5173:8080"

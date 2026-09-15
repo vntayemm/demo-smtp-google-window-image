@@ -1,10 +1,25 @@
 # escape=`
-# Windows container — build from repo root (Switch to Windows containers trước).
-#   docker build -f docker/backend/Dockerfile.windows --build-arg SERVICE=gateway -t backend-gateway .
-ARG WINDOWS_BASE=node:20-windowsservercore-ltsc2022
+# Windows container - build from repo root (Switch to Windows containers first).
+# Official library/node has no Windows tags; install Node onto Server Core.
+# Default base matches Win10 Hyper-V hosts (ltsc2019). Override for Server 2022:
+#   --build-arg WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2022
+ARG WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2019
+ARG NODE_VERSION=20.18.1
 ARG SERVICE=gateway
 
-FROM ${WINDOWS_BASE} AS build
+FROM ${WINDOWS_BASE} AS nodebase
+ARG NODE_VERSION
+SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference='Stop';"]
+RUN New-Item -ItemType Directory -Force -Path C:\nodejs | Out-Null; `
+    $url = "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip"; `
+    Write-Host "Downloading $url"; `
+    Invoke-WebRequest -Uri $url -OutFile C:\node.zip; `
+    Expand-Archive -Path C:\node.zip -DestinationPath C:\nodejs-tmp -Force; `
+    Copy-Item -Path "C:\nodejs-tmp\node-v$env:NODE_VERSION-win-x64\*" -Destination C:\nodejs -Recurse -Force; `
+    Remove-Item C:\node.zip, C:\nodejs-tmp -Recurse -Force
+ENV PATH="C:\\nodejs;C:\\Windows\\System32;C:\\Windows"
+
+FROM nodebase AS build
 WORKDIR C:\app
 COPY package.json package-lock.json ./
 COPY tsconfig.base.json ./
@@ -16,7 +31,7 @@ RUN npm run build -w @demo/shared `
  && npm run build -w @demo/recaptcha-service `
  && npm run build -w @demo/smtp-service
 
-FROM ${WINDOWS_BASE} AS runtime
+FROM nodebase AS runtime
 WORKDIR C:\app
 ENV NODE_ENV=production
 COPY --from=build C:\app\package.json C:\app\package-lock.json ./

@@ -19,7 +19,7 @@ services:
       context: ..
       dockerfile: docker/frontend/Dockerfile.windows
       args:
-        WINDOWS_BASE: ${WINDOWS_BASE:-node:20-windowsservercore-ltsc2022}
+        WINDOWS_BASE: ${WINDOWS_BASE:-mcr.microsoft.com/windows/servercore:ltsc2019}
     restart: unless-stopped
     networks:
       - zone-frontend

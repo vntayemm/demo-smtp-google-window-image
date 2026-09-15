@@ -1,8 +1,21 @@
 # escape=`
-# Windows container — static Vue page (no nginx Linux).
-ARG WINDOWS_BASE=node:20-windowsservercore-ltsc2022
+# Windows container - static Vue page (no nginx Linux).
+ARG WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2019
+ARG NODE_VERSION=20.18.1
 
-FROM ${WINDOWS_BASE}
+FROM ${WINDOWS_BASE} AS nodebase
+ARG NODE_VERSION
+SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference='Stop';"]
+RUN New-Item -ItemType Directory -Force -Path C:\nodejs | Out-Null; `
+    $url = "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip"; `
+    Write-Host "Downloading $url"; `
+    Invoke-WebRequest -Uri $url -OutFile C:\node.zip; `
+    Expand-Archive -Path C:\node.zip -DestinationPath C:\nodejs-tmp -Force; `
+    Copy-Item -Path "C:\nodejs-tmp\node-v$env:NODE_VERSION-win-x64\*" -Destination C:\nodejs -Recurse -Force; `
+    Remove-Item C:\node.zip, C:\nodejs-tmp -Recurse -Force
+ENV PATH="C:\\nodejs;C:\\Windows\\System32;C:\\Windows"
+
+FROM nodebase
 WORKDIR C:\app
 ENV NODE_ENV=production
 ENV PORT=8080

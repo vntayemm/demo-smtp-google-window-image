@@ -1,13 +1,10 @@
 # =============================================================================
-# Compose project name: backend
-# Windows containers — multi-homed theo DMZ:
-#   gateway:     zone-frontend + zone-backend + zone-platform + zone-data
-#   recaptcha:   zone-backend + zone-platform + zone-data
-#   smtp:        zone-backend + zone-platform + zone-data
-# =============================================================================
-# Prerequisite:
-#   Switch to Windows containers
-#   npm run docker:zones:up && npm run docker:data:up && npm run docker:platform:up
+# Server: pull backend images (không build). Cùng zone multi-homed.
+# Prerequisite: docker login + zones + data + platform
+#   IMAGE_BASE=registry.portlogics.com.vn/demo-smtp/linux
+#   IMAGE_TAG=20260916-0130
+#   docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml pull
+#   docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml up -d
 # =============================================================================
 
 name: backend
@@ -38,29 +35,14 @@ x-common-env: &common-env
   EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Demo Portal}
   POSTGRES_HOST: postgres-primary
   POSTGRES_PORT: "5432"
-  # RECAPTCHA_* từ env_file ../.env — không interpolate rỗng vào environment
-
-x-windows: &windows
-  isolation: ${WINDOWS_ISOLATION:-process}
-  # platform: windows — bật khi Docker đang ở Windows container mode
 
 services:
-  # Edge / reverse path từ DMZ frontend → app → data
   gateway:
-    <<: *windows
     container_name: backend-gateway
-    build:
-      context: ..
-      dockerfile: docker/backend/Dockerfile.windows
-      args:
-        SERVICE: gateway
-        WINDOWS_BASE: ${WINDOWS_BASE:-mcr.microsoft.com/windows/servercore:ltsc2019}
+    image: ${IMAGE_BASE:-registry.portlogics.com.vn/demo-smtp/linux}/gateway:${IMAGE_TAG:-demo}
+    pull_policy: always
     restart: unless-stopped
-    networks:
-      zone-frontend:
-      zone-backend:
-      zone-platform:
-      zone-data:
+    networks: [zone-frontend, zone-backend, zone-platform, zone-data]
     env_file:
       - path: ../.env
         required: false
@@ -72,19 +54,11 @@ services:
       - "7080:7080"
 
   recaptcha-service:
-    <<: *windows
     container_name: backend-recaptcha-service
-    build:
-      context: ..
-      dockerfile: docker/backend/Dockerfile.windows
-      args:
-        SERVICE: recaptcha-service
-        WINDOWS_BASE: ${WINDOWS_BASE:-mcr.microsoft.com/windows/servercore:ltsc2019}
+    image: ${IMAGE_BASE:-registry.portlogics.com.vn/demo-smtp/linux}/recaptcha-service:${IMAGE_TAG:-demo}
+    pull_policy: always
     restart: unless-stopped
-    networks:
-      zone-backend:
-      zone-platform:
-      zone-data:
+    networks: [zone-backend, zone-platform, zone-data]
     env_file:
       - path: ../.env
         required: false
@@ -93,19 +67,11 @@ services:
       OTEL_SERVICE_NAME: demo-recaptcha-service
 
   smtp-service:
-    <<: *windows
     container_name: backend-smtp-service
-    build:
-      context: ..
-      dockerfile: docker/backend/Dockerfile.windows
-      args:
-        SERVICE: smtp-service
-        WINDOWS_BASE: ${WINDOWS_BASE:-mcr.microsoft.com/windows/servercore:ltsc2019}
+    image: ${IMAGE_BASE:-registry.portlogics.com.vn/demo-smtp/linux}/smtp-service:${IMAGE_TAG:-demo}
+    pull_policy: always
     restart: unless-stopped
-    networks:
-      zone-backend:
-      zone-platform:
-      zone-data:
+    networks: [zone-backend, zone-platform, zone-data]
     env_file:
       - path: ../.env
         required: false
