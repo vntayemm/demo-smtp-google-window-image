@@ -17,7 +17,9 @@
     "dev:smtp": "npm run start -w @demo/smtp-service",
     "dev:frontend": "npm run start -w @demo/frontend",
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f docker/docker-compose.yml down -v"
+    "docker:down": "docker compose -f docker/docker-compose.yml down -v",
+    "env:dev": "node -e \"require('fs').copyFileSync('.env.example','.env'); console.log('Wrote .env from .env.example (MailDev)')\"",
+    "env:production": "node -e \"require('fs').copyFileSync('.env.production.example','.env'); console.log('Wrote .env from .env.production.example (CMIT relay)')\""
   },
   "engines": {
     "node": ">=18"

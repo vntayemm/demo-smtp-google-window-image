@@ -6,6 +6,8 @@ export interface EmailSettings {
   password: string;
   fromAddress: string;
   fromName: string;
+  /** Optional: no-reply / admin notify mailbox (CMIT: no-reply@cmit.com.vn). */
+  adminNotifyAddress: string;
 }
 
 export interface EmailMessage {
@@ -24,6 +26,7 @@ export function loadEmailSettings(): EmailSettings {
     password: process.env.EMAIL_PASSWORD?.trim() || "",
     fromAddress: process.env.EMAIL_FROM_ADDRESS?.trim() || "demo@localhost",
     fromName: process.env.EMAIL_FROM_NAME?.trim() || "Demo Portal",
+    adminNotifyAddress: process.env.EMAIL_ADMIN_NOTIFY?.trim() || "",
   };
 }
 

@@ -319,3 +319,4 @@ Lý do thứ tự: DB/DR trước; mail chứng minh độc lập NATS HA; captc
 | 2026-09-16 | (new) | Draft plan: reCAPTCHA FE/BE, SMTP/JetStream, NATS 3, Postgres 2 |
 | 2026-09-16 | move | Chuyển từ `cmit-cp/Documents` → `demo-smtp-google-window-image/docs` |
 | 2026-09-16 | impl | Vue2 FE + TS microservices (gateway/recaptcha/smtp) + docker NATS-3 |
+| 2026-09-16 | smtp | Thêm `.env.production.example` + docs CMIT relay 172.16.84.91 |

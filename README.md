@@ -44,9 +44,33 @@ npm run dev:frontend
 # mail: http://127.0.0.1:1080
 ```
 
-`.env` mặc định dùng **Google reCAPTCHA test keys** (luôn pass) + MailDev `127.0.0.1:1025`.
+`.env` / `.env.example` dùng cặp **reCAPTCHA v2 CMIT - Customer Portal** (Dev + Prod chung):
 
-Gmail thật: set `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`, `EMAIL_ENABLE_SSL=true`, App Password 16 ký tự.
+| | |
+| --- | --- |
+| Site key | `6Le_34otAAAAAKt2gmK8RIR-amPBcRHgJxcDgw9F` (frontend) |
+| Secret key | `6Le_34otAAAAANVEAaHJRmYDbE5-Oy32cS36Dou` (recaptcha-service) |
+
+Khai đủ domain trên Google Admin (`localhost`, host UAT/Prod). SMTP local vẫn là MailDev.
+
+### Production email (CMIT SMTP relay)
+
+```bash
+cp .env.production.example .env
+```
+
+| Biến | Giá trị |
+| ---- | ------- |
+| `EMAIL_HOST` | `172.16.84.91` |
+| `EMAIL_PORT` | `25` (xác nhận IT nếu khác) |
+| `EMAIL_ENABLE_SSL` | `false` |
+| `EMAIL_USERNAME` / `EMAIL_PASSWORD` | **để trống** (relay không AUTH) |
+| `EMAIL_FROM_ADDRESS` | `eport@cmit.com.vn` |
+| `EMAIL_ADMIN_NOTIFY` | `no-reply@cmit.com.vn` |
+
+Chi tiết + whitelist IP: [`docs/SMTP-PRODUCTION-CMIT.md`](docs/SMTP-PRODUCTION-CMIT.md).
+
+Gmail (tuỳ chọn, không phải prod CMIT): `smtp.gmail.com:587` + App Password.
 
 ## Subjects
 

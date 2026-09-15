@@ -1,9 +1,11 @@
-# NATS JetStream 3-node + MailDev SMTP catcher
+# NATS JetStream 3-node + MailDev + Jaeger UI (OTLP)
 #   docker compose -f docker/docker-compose.yml up -d
 # Client:
 #   NATS_URL=nats://127.0.0.1:14222,nats://127.0.0.1:14223,nats://127.0.0.1:14224
-# Mail UI: http://127.0.0.1:1080
-# SMTP:    127.0.0.1:1025
+# Mail UI:   http://127.0.0.1:1080
+# SMTP:      127.0.0.1:1025
+# Jaeger UI: http://127.0.0.1:16686  (trace: gateway → recaptcha → email.send → smtp)
+# OTLP HTTP: http://127.0.0.1:4318
 
 x-nats: &nats
   image: nats:2.10-alpine
@@ -54,6 +56,18 @@ services:
     ports:
       - "1080:1080"
       - "1025:1025"
+    restart: unless-stopped
+
+  # All-in-one: UI + collector (OTLP). Xem message/NATS span trên Search → Service.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: demo-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP (Node SDK)
     restart: unless-stopped
 
 volumes:

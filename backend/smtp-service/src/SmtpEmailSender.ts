@@ -38,12 +38,20 @@ export class SmtpEmailSender implements IEmailSender {
       host: this.settings.host,
       port: this.settings.port,
       secure: this.settings.enableSsl && this.settings.port === 465,
+      // Relay nội bộ (CMIT 172.16.84.91): không TLS, không AUTH
       requireTLS: this.settings.enableSsl && this.settings.port !== 465,
+      ignoreTLS: !this.settings.enableSsl,
       auth,
       tls: {
         rejectUnauthorized: false,
       },
     });
+
+    console.log(
+      `[smtp] transporter host=${this.settings.host}:${this.settings.port} ` +
+        `ssl=${this.settings.enableSsl} auth=${Boolean(auth)} ` +
+        `from=${this.settings.fromAddress}`
+    );
 
     return this.transporter;
   }
