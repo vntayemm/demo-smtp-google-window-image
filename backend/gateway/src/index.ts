@@ -5,11 +5,15 @@ import express from "express";
 import cors from "cors";
 import {
   Subjects,
+  SpanKind,
   bootstrapEmailJetStream,
   connectNats,
   decodeJson,
   encodeJson,
+  initTracing,
+  injectTraceHeaders,
   loadNatsEnv,
+  runWithSpan,
   type EmailSendPayload,
   type GatewaySendEmailRequest,
   type GatewaySendEmailResponse,
@@ -22,6 +26,8 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
 
 async function main(): Promise<void> {
+  await initTracing(process.env.OTEL_SERVICE_NAME || "demo-gateway");
+
   const natsEnv = loadNatsEnv();
   const nc = await connectNats(natsEnv.url);
   const { js } = await bootstrapEmailJetStream(nc, natsEnv.jetStreamReplicas);
@@ -35,6 +41,7 @@ async function main(): Promise<void> {
       ok: true,
       nats: nc.getServer(),
       siteKeyConfigured: Boolean(process.env.RECAPTCHA_SITE_KEY),
+      jaegerUi: "http://127.0.0.1:16686",
     });
   });
 
@@ -42,6 +49,7 @@ async function main(): Promise<void> {
     res.json({
       recaptchaEnabled: (process.env.RECAPTCHA_ENABLED || "true").toLowerCase() === "true",
       siteKey: process.env.RECAPTCHA_SITE_KEY || "",
+      jaegerUi: "http://127.0.0.1:16686",
     });
   });
 
@@ -62,44 +70,97 @@ async function main(): Promise<void> {
     }
 
     try {
-      const verifyReq: RecaptchaVerifyRequest = {
-        token: body.recaptchaToken || "",
-        remoteIp,
-      };
+      const result = await runWithSpan(
+        "demo-gateway",
+        "HTTP POST /api/demo/send-email",
+        SpanKind.SERVER,
+        {
+          "http.method": "POST",
+          "http.route": "/api/demo/send-email",
+          "messaging.system": "nats",
+          "enduser.ip": remoteIp || "",
+        },
+        async (rootSpan) => {
+          const verifyReq: RecaptchaVerifyRequest = {
+            token: body.recaptchaToken || "",
+            remoteIp,
+          };
 
-      const verifyMsg = await nc.request(
-        Subjects.RecaptchaVerify,
-        encodeJson(verifyReq),
-        { timeout: 8_000 }
+          const verify = await runWithSpan(
+            "demo-gateway",
+            "nats.request demo.recaptcha.verify",
+            SpanKind.CLIENT,
+            {
+              "messaging.system": "nats",
+              "messaging.destination": Subjects.RecaptchaVerify,
+              "messaging.operation": "request",
+            },
+            async () => {
+              const hdr = injectTraceHeaders(natsHeaders());
+              const verifyMsg = await nc.request(
+                Subjects.RecaptchaVerify,
+                encodeJson(verifyReq),
+                { timeout: 8_000, headers: hdr }
+              );
+              return decodeJson<RecaptchaVerifyResponse>(verifyMsg.data);
+            }
+          );
+
+          if (!verify.success) {
+            rootSpan.setAttribute("recaptcha.success", false);
+            return {
+              status: 400,
+              body: {
+                ok: false,
+                error: verify.message || "reCAPTCHA failed",
+              } satisfies GatewaySendEmailResponse,
+            };
+          }
+
+          rootSpan.setAttribute("recaptcha.success", true);
+          const messageId = crypto.randomUUID();
+          const payload: EmailSendPayload = {
+            messageId,
+            to: body.to.trim(),
+            subject: body.subject.trim(),
+            html: body.body,
+            type: "demo.send",
+            source: "gateway",
+          };
+
+          await runWithSpan(
+            "demo-gateway",
+            "jetstream.publish email.send",
+            SpanKind.PRODUCER,
+            {
+              "messaging.system": "nats",
+              "messaging.destination": Subjects.EmailSend,
+              "messaging.operation": "publish",
+              "messaging.message.id": messageId,
+            },
+            async () => {
+              const hdr = injectTraceHeaders(natsHeaders());
+              hdr.set("Nats-Msg-Id", messageId);
+              await js.publish(Subjects.EmailSend, encodeJson(payload), {
+                headers: hdr,
+              });
+            }
+          );
+
+          rootSpan.setAttribute("email.message_id", messageId);
+          return {
+            status: 200,
+            body: { ok: true, messageId } satisfies GatewaySendEmailResponse,
+          };
+        }
       );
-      const verify = decodeJson<RecaptchaVerifyResponse>(verifyMsg.data);
-      if (!verify.success) {
-        const fail: GatewaySendEmailResponse = {
-          ok: false,
-          error: verify.message || "reCAPTCHA failed",
-        };
-        res.status(400).json(fail);
-        return;
+
+      res.status(result.status).json(result.body);
+      if (result.body.ok) {
+        console.log(
+          `[gateway] published email.send MessageId=${result.body.messageId} To=${body.to}`
+        );
       }
-
-      const messageId = crypto.randomUUID();
-      const payload: EmailSendPayload = {
-        messageId,
-        to: body.to.trim(),
-        subject: body.subject.trim(),
-        html: body.body,
-        type: "demo.send",
-        source: "gateway",
-      };
-
-      const hdr = natsHeaders();
-      hdr.set("Nats-Msg-Id", messageId);
-
-      await js.publish(Subjects.EmailSend, encodeJson(payload), { headers: hdr });
-
-      const ok: GatewaySendEmailResponse = { ok: true, messageId };
-      res.json(ok);
-      console.log(`[gateway] published email.send MessageId=${messageId} To=${payload.to}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[gateway] send-email error", err);
@@ -111,6 +172,7 @@ async function main(): Promise<void> {
   const port = Number(process.env.GATEWAY_PORT || "7080");
   app.listen(port, () => {
     console.log(`[gateway] http://127.0.0.1:${port}`);
+    console.log(`[gateway] Jaeger UI http://127.0.0.1:16686`);
   });
 }
 

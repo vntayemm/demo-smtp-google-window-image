@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+# Linux fallback (Docker Desktop Linux engine) — không phải target prod Windows.
+ARG SERVICE=gateway
+
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
+COPY backend ./backend
+COPY frontend ./frontend
+RUN npm ci
+RUN npm run build -w @demo/shared \
+ && npm run build -w @demo/gateway \
+ && npm run build -w @demo/recaptcha-service \
+ && npm run build -w @demo/smtp-service
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/backend ./backend
+ARG SERVICE=gateway
+ENV SERVICE=${SERVICE}
+WORKDIR /app/backend/${SERVICE}
+CMD ["sh", "-c", "node dist/index.js"]

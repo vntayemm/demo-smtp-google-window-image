@@ -1,30 +1,52 @@
-# Docker stack — demo
+# Docker — 4 groups × 4 network zones (DMZ)
 
-| Service | Port (host) | URL / dùng để |
-| ------- | ----------- | ------------- |
-| nats-1/2/3 | 14222–14224 | NATS client |
-| nats monitor | 18222–18224 | `/jsz` cluster |
-| maildev UI | 1080 | xem mail SMTP |
-| maildev SMTP | 1025 | `EMAIL_HOST` |
-| **Jaeger UI** | **16686** | **xem message / request trace** |
-| OTLP HTTP | 4318 | SDK export (`OTEL_EXPORTER_OTLP_ENDPOINT`) |
-| OTLP gRPC | 4317 | tuỳ chọn |
+Chi tiết zone: [`docs/NETWORK-ZONES-DMZ.md`](../docs/NETWORK-ZONES-DMZ.md).
+
+| Group | Compose | Network zone(s) | Runtime |
+| ----- | ------- | --------------- | ------- |
+| **zones** | `compose.zones.yml` | tạo 4 zone | — |
+| **data** | `compose.data.yml` | `zone-data` only | NATS, Postgres (Linux image / native prod) |
+| **platform** | `compose.platform.yml` | `zone-platform` only | Jaeger, MailDev |
+| **backend** | `compose.backend.yml` | multi-homed | **Windows** Node containers |
+| **frontend** | `compose.frontend.yml` | `zone-frontend` only | **Windows** Node static |
+
+## Attach matrix
+
+| Service | frontend | backend | platform | data |
+| ------- | :------: | :-----: | :------: | :--: |
+| frontend-web | ✓ | | | |
+| gateway | ✓ | ✓ | ✓ | ✓ |
+| recaptcha-service | | ✓ | ✓ | ✓ |
+| smtp-service | | ✓ | ✓ | ✓ |
+| maildev / jaeger | | | ✓ | |
+| nats / postgres | | | | ✓ |
+
+## Commands (Windows containers — target)
+
+```powershell
+# Switch to Windows containers trước
+$env:DOCKER_NETWORK_DRIVER = "nat"
+npm run docker:zones:up
+npm run docker:data:up          # cần Linux images hoặc external IP data VLAN
+npm run docker:platform:up
+npm run docker:backend:up       # Dockerfile.windows
+npm run docker:frontend:up
+```
+
+## Commands (Linux engine laptop)
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
-# Jaeger: http://127.0.0.1:16686
+export DOCKER_NETWORK_DRIVER=bridge
+npm run docker:zones:up
+npm run docker:data:up
+npm run docker:platform:up
+npm run docker:backend:linux:up
+npm run docker:frontend:linux:up
 ```
 
-## Trace flow (OpenTelemetry → Jaeger)
+## URLs
 
-```
-HTTP POST /api/demo/send-email          (gateway)
-  └─ nats.request demo.recaptcha.verify (gateway → recaptcha-service)
-  └─ jetstream.publish email.send       (gateway)
-       └─ jetstream.consume email-worker (smtp-service)
-            └─ smtp.send
-```
-
-Context lan truyền qua NATS header `traceparent` (W3C).
-
-Trong Jaeger UI: Search → Service `demo-gateway` → Find Traces → mở 1 trace xem full pipeline.
+- Frontend DMZ: http://127.0.0.1:5173 (`/api` → gateway cùng zone-frontend)
+- Gateway publish: http://127.0.0.1:7080
+- Jaeger: http://127.0.0.1:16686
+- MailDev: http://127.0.0.1:1080

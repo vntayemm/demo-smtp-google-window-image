@@ -1,0 +1,40 @@
+# =============================================================================
+# Compose project name: zones
+# Tạo 4 zone mạng kiểu DMZ (không chạy service).
+# =============================================================================
+# Windows containers → DOCKER_NETWORK_DRIVER=nat
+# Linux engine (Docker Desktop) → DOCKER_NETWORK_DRIVER=bridge (default)
+#
+#   npm run docker:zones:up
+# =============================================================================
+
+name: zones
+
+networks:
+  zone-frontend:
+    name: zone-frontend
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    labels:
+      demo.zone: frontend
+      demo.role: dmz-public
+
+  zone-backend:
+    name: zone-backend
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    labels:
+      demo.zone: backend
+      demo.role: app-tier
+
+  zone-platform:
+    name: zone-platform
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    labels:
+      demo.zone: platform
+      demo.role: shared-services
+
+  zone-data:
+    name: zone-data
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    labels:
+      demo.zone: data
+      demo.role: data-tier

@@ -1,85 +1,51 @@
-# Demo — reCAPTCHA + SMTP microservices (TypeScript) + NATS 3-node
-
-Repo chứng minh luồng:
+# Demo — Windows containers + 4 DMZ network zones
 
 ```
-Vue 2 (frontend/) 
-  → HTTP gateway 
-  → NATS request/reply → recaptcha-service (ReCaptchaService)
-  → JetStream email.send 
-  → smtp-service (SmtpService + SmtpEmailSender) 
-  → MailDev / Gmail
+Browser → zone-frontend (web) → gateway (edge)
+        → zone-backend (recaptcha / smtp)
+        → zone-platform (Jaeger / MailDev) + zone-data (NATS / Postgres)
 ```
 
-## Cấu trúc
+## Groups & zones
 
-| Path | Vai trò |
-| ---- | ------- |
-| `frontend/index.html` | Vue **2** + Google reCAPTCHA v2 checkbox |
-| `backend/gateway` | HTTP API → NATS |
-| `backend/recaptcha-service` | Microservice `ReCaptchaService` |
-| `backend/smtp-service` | Microservice `SmtpService` + `SmtpEmailSender` |
-| `backend/shared` | Subjects, JetStream bootstrap, types |
-| `docker/` | NATS cluster 3 node + MailDev |
+| Group | Zone network | Chứa |
+| ----- | ------------ | ---- |
+| **zones** | tạo 4 net | `zone-frontend`, `zone-backend`, `zone-platform`, `zone-data` |
+| **data** | `zone-data` | NATS×3, PostgreSQL×2 |
+| **platform** | `zone-platform` | Jaeger, MailDev |
+| **backend** | multi-homed | Windows: gateway, recaptcha, smtp |
+| **frontend** | `zone-frontend` | Windows: Vue static + `/api` proxy |
 
-## Chạy nhanh
+Xem [`docs/NETWORK-ZONES-DMZ.md`](docs/NETWORK-ZONES-DMZ.md).
 
-```bash
-# 1) Infra
+## Chạy (Windows containers — target)
+
+```powershell
+# Docker: Switch to Windows containers
+$env:DOCKER_NETWORK_DRIVER = "nat"
 cp .env.example .env
 npm run docker:up
-# chờ cluster: curl -s http://127.0.0.1:18222/jsz | findstr cluster_size
-
-# 2) Deps
-npm install
-
-# 3) 3 terminal
-npm run dev:recaptcha
-npm run dev:smtp
-npm run dev:gateway
-
-# 4) Frontend
-npm run dev:frontend
-# mở http://127.0.0.1:5173
-# mail: http://127.0.0.1:1080
 ```
 
-`.env` / `.env.example` dùng cặp **reCAPTCHA v2 CMIT - Customer Portal** (Dev + Prod chung):
+Base image mặc định: `node:20-windowsservercore-ltsc2022`  
+Server 2025 (build 26100): `$env:WINDOWS_BASE="node:20-windowsservercore-ltsc2025"`
+
+## Laptop Linux engine (fallback)
+
+```bash
+export DOCKER_NETWORK_DRIVER=bridge
+npm run docker:up:linux
+```
+
+## URLs
 
 | | |
 | --- | --- |
-| Site key | `6Le_34otAAAAAKt2gmK8RIR-amPBcRHgJxcDgw9F` (frontend) |
-| Secret key | `6Le_34otAAAAANVEAaHJRmYDbE5-Oy32cS36Dou` (recaptcha-service) |
+| Frontend | http://127.0.0.1:5173 |
+| Gateway | http://127.0.0.1:7080 |
+| Jaeger | http://127.0.0.1:16686 |
+| MailDev | http://127.0.0.1:1080 |
 
-Khai đủ domain trên Google Admin (`localhost`, host UAT/Prod). SMTP local vẫn là MailDev.
+## reCAPTCHA / SMTP prod
 
-### Production email (CMIT SMTP relay)
-
-```bash
-cp .env.production.example .env
-```
-
-| Biến | Giá trị |
-| ---- | ------- |
-| `EMAIL_HOST` | `172.16.84.91` |
-| `EMAIL_PORT` | `25` (xác nhận IT nếu khác) |
-| `EMAIL_ENABLE_SSL` | `false` |
-| `EMAIL_USERNAME` / `EMAIL_PASSWORD` | **để trống** (relay không AUTH) |
-| `EMAIL_FROM_ADDRESS` | `eport@cmit.com.vn` |
-| `EMAIL_ADMIN_NOTIFY` | `no-reply@cmit.com.vn` |
-
-Chi tiết + whitelist IP: [`docs/SMTP-PRODUCTION-CMIT.md`](docs/SMTP-PRODUCTION-CMIT.md).
-
-Gmail (tuỳ chọn, không phải prod CMIT): `smtp.gmail.com:587` + App Password.
-
-## Subjects
-
-| Subject | Kiểu |
-| ------- | ---- |
-| `demo.recaptcha.verify` | request/reply |
-| `email.send` | JetStream stream `EMAIL` |
-| `email.dlq` | JetStream stream `EMAIL_DLQ` |
-
-## Docs
-
-Xem `docs/RECAPTCHA-SMTP-NATS-POSTGRES-PLAN.md`.
+`.env.production.example`, `docs/RECAPTCHA-CMIT-KEYS.md`, `docs/SMTP-PRODUCTION-CMIT.md`.

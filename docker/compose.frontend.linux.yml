@@ -1,0 +1,24 @@
+# Linux-engine fallback frontend — zone-frontend only
+
+name: frontend
+
+networks:
+  zone-frontend:
+    external: true
+    name: zone-frontend
+
+services:
+  web:
+    container_name: frontend-web
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile.linux
+    restart: unless-stopped
+    networks: [zone-frontend]
+    environment:
+      DEMO_GATEWAY: ${DEMO_GATEWAY:-}
+      GATEWAY_PROXY_HOST: gateway
+      GATEWAY_PROXY_PORT: "7080"
+      PORT: "8080"
+    ports:
+      - "5173:8080"

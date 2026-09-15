@@ -1,0 +1,114 @@
+# =============================================================================
+# Compose project name: backend
+# Windows containers — multi-homed theo DMZ:
+#   gateway:     zone-frontend + zone-backend + zone-platform + zone-data
+#   recaptcha:   zone-backend + zone-platform + zone-data
+#   smtp:        zone-backend + zone-platform + zone-data
+# =============================================================================
+# Prerequisite:
+#   Switch to Windows containers
+#   npm run docker:zones:up && npm run docker:data:up && npm run docker:platform:up
+# =============================================================================
+
+name: backend
+
+networks:
+  zone-frontend:
+    external: true
+    name: zone-frontend
+  zone-backend:
+    external: true
+    name: zone-backend
+  zone-platform:
+    external: true
+    name: zone-platform
+  zone-data:
+    external: true
+    name: zone-data
+
+x-common-env: &common-env
+  NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+  NATS_JETSTREAM_REPLICAS: ${NATS_JETSTREAM_REPLICAS:-3}
+  OTEL_ENABLED: ${OTEL_ENABLED:-true}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  EMAIL_HOST: ${EMAIL_HOST_DOCKER:-maildev}
+  EMAIL_PORT: ${EMAIL_PORT_DOCKER:-1025}
+  EMAIL_ENABLE_SSL: ${EMAIL_ENABLE_SSL:-false}
+  EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-demo@localhost}
+  EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Demo Portal}
+  POSTGRES_HOST: postgres-primary
+  POSTGRES_PORT: "5432"
+  # RECAPTCHA_* từ env_file ../.env — không interpolate rỗng vào environment
+
+x-windows: &windows
+  isolation: ${WINDOWS_ISOLATION:-process}
+  # platform: windows — bật khi Docker đang ở Windows container mode
+
+services:
+  # Edge / reverse path từ DMZ frontend → app → data
+  gateway:
+    <<: *windows
+    container_name: backend-gateway
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.windows
+      args:
+        SERVICE: gateway
+        WINDOWS_BASE: ${WINDOWS_BASE:-node:20-windowsservercore-ltsc2022}
+    restart: unless-stopped
+    networks:
+      zone-frontend:
+      zone-backend:
+      zone-platform:
+      zone-data:
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-gateway
+      GATEWAY_PORT: "7080"
+    ports:
+      - "7080:7080"
+
+  recaptcha-service:
+    <<: *windows
+    container_name: backend-recaptcha-service
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.windows
+      args:
+        SERVICE: recaptcha-service
+        WINDOWS_BASE: ${WINDOWS_BASE:-node:20-windowsservercore-ltsc2022}
+    restart: unless-stopped
+    networks:
+      zone-backend:
+      zone-platform:
+      zone-data:
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-recaptcha-service
+
+  smtp-service:
+    <<: *windows
+    container_name: backend-smtp-service
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.windows
+      args:
+        SERVICE: smtp-service
+        WINDOWS_BASE: ${WINDOWS_BASE:-node:20-windowsservercore-ltsc2022}
+    restart: unless-stopped
+    networks:
+      zone-backend:
+      zone-platform:
+      zone-data:
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-smtp-service

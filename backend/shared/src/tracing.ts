@@ -15,6 +15,8 @@ import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import type { MsgHdrs } from "nats";
 import { headers as createHeaders } from "nats";
 
+export { SpanKind, SpanStatusCode };
+
 let sdk: NodeSDK | null = null;
 
 export function isTracingEnabled(): boolean {
@@ -55,7 +57,7 @@ export async function initTracing(serviceName: string): Promise<void> {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  await sdk.start();
+  sdk.start();
   console.log(`[otel] ${serviceName} → ${endpoint}/v1/traces (Jaeger UI :16686)`);
 
   const shutdown = async (): Promise<void> => {

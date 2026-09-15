@@ -1,0 +1,12 @@
+# escape=`
+# Windows container — static Vue page (no nginx Linux).
+ARG WINDOWS_BASE=node:20-windowsservercore-ltsc2022
+
+FROM ${WINDOWS_BASE}
+WORKDIR C:\app
+ENV NODE_ENV=production
+ENV PORT=8080
+COPY frontend\index.html .\index.html
+COPY docker\frontend\serve.js .\serve.js
+EXPOSE 8080
+CMD ["node", "serve.js"]

@@ -1,0 +1,106 @@
+# =============================================================================
+# Compose project name: data
+# Zone: zone-data only — NATS ×3 · PostgreSQL primary+standby
+# =============================================================================
+# Prerequisite: npm run docker:zones:up
+# Windows Server thật: NATS/Postgres thường cài native trên VLAN data (.40/.45).
+# Compose này mô phỏng đúng zone; image Linux chỉ dùng khi Docker engine = Linux.
+# Windows container host: trỏ NATS/PG tới IP VLAN data (external), vẫn gắn zone-data.
+# =============================================================================
+
+name: data
+
+networks:
+  zone-data:
+    external: true
+    name: zone-data
+
+volumes:
+  data_nats1:
+  data_nats2:
+  data_nats3:
+  data_pg_primary:
+  data_pg_standby:
+
+x-nats: &nats
+  image: nats:2.10-alpine
+  restart: unless-stopped
+  networks: [zone-data]
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/varz"]
+    interval: 5s
+    timeout: 3s
+    retries: 12
+
+services:
+  nats-1:
+    <<: *nats
+    container_name: data-nats-1
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "14222:4222"
+      - "18222:8222"
+    volumes:
+      - ./nats/nats-1.conf:/etc/nats/nats.conf:ro
+      - data_nats1:/data
+
+  nats-2:
+    <<: *nats
+    container_name: data-nats-2
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "14223:4222"
+      - "18223:8222"
+    volumes:
+      - ./nats/nats-2.conf:/etc/nats/nats.conf:ro
+      - data_nats2:/data
+
+  nats-3:
+    <<: *nats
+    container_name: data-nats-3
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "14224:4222"
+      - "18224:8222"
+    volumes:
+      - ./nats/nats-3.conf:/etc/nats/nats.conf:ro
+      - data_nats3:/data
+
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: data-postgres-primary
+    restart: unless-stopped
+    networks: [zone-data]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-demo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo}
+      POSTGRES_DB: ${POSTGRES_DB:-demo_smtp}
+    ports:
+      - "15432:5432"
+    volumes:
+      - data_pg_primary:/var/lib/postgresql/data
+      - ./postgres/primary-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-demo} -d ${POSTGRES_DB:-demo_smtp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  postgres-standby:
+    image: postgres:16-alpine
+    container_name: data-postgres-standby
+    restart: unless-stopped
+    networks: [zone-data]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-demo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo}
+      POSTGRES_DB: ${POSTGRES_DB:-demo_smtp}
+    ports:
+      - "15433:5432"
+    volumes:
+      - data_pg_standby:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-demo} -d ${POSTGRES_DB:-demo_smtp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

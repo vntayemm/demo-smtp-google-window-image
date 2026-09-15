@@ -1,0 +1,35 @@
+# =============================================================================
+# Compose project name: platform
+# Zone: zone-platform only — Jaeger UI · MailDev
+# =============================================================================
+# Prerequisite: npm run docker:zones:up
+# =============================================================================
+
+name: platform
+
+networks:
+  zone-platform:
+    external: true
+    name: zone-platform
+
+services:
+  maildev:
+    image: maildev/maildev:2.1.0
+    container_name: platform-maildev
+    restart: unless-stopped
+    networks: [zone-platform]
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: platform-jaeger
+    restart: unless-stopped
+    networks: [zone-platform]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"

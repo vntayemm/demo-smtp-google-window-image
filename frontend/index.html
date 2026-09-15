@@ -146,12 +146,14 @@
 
     <p class="meta">
       Gateway: <code>{{ gatewayBase }}</code>
-      · MailDev UI: <code>http://127.0.0.1:1080</code>
+      · MailDev: <code>http://127.0.0.1:1080</code>
+      · Jaeger: <a href="http://127.0.0.1:16686" target="_blank" rel="noopener" style="color:#8ec7ff">http://127.0.0.1:16686</a>
     </p>
   </div>
 
   <script>
-    var GATEWAY = window.DEMO_GATEWAY || "http://127.0.0.1:7080";
+    // DMZ: để trống → same-origin /api (frontend proxy → gateway trên zone-frontend)
+    var GATEWAY = window.DEMO_GATEWAY || "";
 
     new Vue({
       el: "#app",
