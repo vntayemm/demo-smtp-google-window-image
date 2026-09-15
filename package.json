@@ -1,0 +1,25 @@
+{
+  "name": "demo-smtp-google-window-image",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Demo reCAPTCHA + SMTP microservices over NATS JetStream cluster (TypeScript)",
+  "workspaces": [
+    "backend/shared",
+    "backend/gateway",
+    "backend/recaptcha-service",
+    "backend/smtp-service",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w @demo/shared && npm run build -w @demo/gateway && npm run build -w @demo/recaptcha-service && npm run build -w @demo/smtp-service",
+    "dev:gateway": "npm run start -w @demo/gateway",
+    "dev:recaptcha": "npm run start -w @demo/recaptcha-service",
+    "dev:smtp": "npm run start -w @demo/smtp-service",
+    "dev:frontend": "npm run start -w @demo/frontend",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down -v"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

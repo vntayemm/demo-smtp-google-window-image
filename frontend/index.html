@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo — reCAPTCHA + SMTP (Vue 2)</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #9aa7b8;
+      --accent: #3d8bfd;
+      --ok: #3dd68c;
+      --err: #f07178;
+      --border: #2a3648;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #243b2e 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 48px 20px 64px;
+    }
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 28px;
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px 22px 18px;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+    .field { margin-bottom: 14px; }
+    input, textarea {
+      width: 100%;
+      background: #121a24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .captcha-box {
+      margin: 8px 0 16px;
+      min-height: 78px;
+    }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 12px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .msg {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .msg.ok { background: rgba(61, 214, 140, 0.12); color: var(--ok); }
+    .msg.err { background: rgba(240, 113, 120, 0.12); color: var(--err); }
+    .meta {
+      margin-top: 18px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    code { color: #c3d4ef; }
+  </style>
+</head>
+<body>
+  <div id="app" class="wrap">
+    <h1>reCAPTCHA → NATS → SMTP</h1>
+    <p class="lead">
+      Vue&nbsp;2 demo: tick captcha, gửi form qua gateway.
+      Gateway verify qua <code>recaptcha-service</code>, publish JetStream,
+      <code>smtp-service</code> gửi MailDev/Gmail.
+    </p>
+
+    <div class="card">
+      <div class="field">
+        <label for="to">To</label>
+        <input id="to" v-model.trim="to" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label for="subject">Subject</label>
+        <input id="subject" v-model.trim="subject" type="text" placeholder="Demo OTP" />
+      </div>
+      <div class="field">
+        <label for="body">Body (HTML ok)</label>
+        <textarea id="body" v-model="body" placeholder="<p>Hello from demo</p>"></textarea>
+      </div>
+
+      <div class="captcha-box">
+        <div v-if="!configLoaded" class="meta">Đang tải config…</div>
+        <div v-else-if="!recaptchaEnabled" class="meta">reCAPTCHA tắt (backend skip verify).</div>
+        <div v-else-if="!siteKey" class="msg err">Thiếu RECAPTCHA_SITE_KEY.</div>
+        <div v-show="recaptchaEnabled && siteKey" id="recaptcha-container"></div>
+      </div>
+
+      <button type="button" :disabled="sending" @click="submit">
+        {{ sending ? 'Đang gửi…' : 'Gửi email demo' }}
+      </button>
+
+      <div v-if="message" :class="['msg', messageOk ? 'ok' : 'err']">{{ message }}</div>
+    </div>
+
+    <p class="meta">
+      Gateway: <code>{{ gatewayBase }}</code>
+      · MailDev UI: <code>http://127.0.0.1:1080</code>
+    </p>
+  </div>
+
+  <script>
+    var GATEWAY = window.DEMO_GATEWAY || "http://127.0.0.1:7080";
+
+    new Vue({
+      el: "#app",
+      data: function () {
+        return {
+          gatewayBase: GATEWAY,
+          to: "",
+          subject: "Demo SMTP via NATS",
+          body: "<p>Xin chào — mail demo từ Vue 2 + reCAPTCHA + JetStream.</p>",
+          configLoaded: false,
+          recaptchaEnabled: true,
+          siteKey: "",
+          widgetId: null,
+          sending: false,
+          message: "",
+          messageOk: false,
+        };
+      },
+      mounted: function () {
+        var self = this;
+        fetch(GATEWAY + "/api/config")
+          .then(function (r) { return r.json(); })
+          .then(function (cfg) {
+            self.recaptchaEnabled = !!cfg.recaptchaEnabled;
+            self.siteKey = cfg.siteKey || "";
+            self.configLoaded = true;
+            if (self.recaptchaEnabled && self.siteKey) {
+              self.loadRecaptcha().then(function () {
+                self.renderWidget();
+              });
+            }
+          })
+          .catch(function (err) {
+            self.configLoaded = true;
+            self.messageOk = false;
+            self.message = "Không nối được gateway: " + err;
+          });
+      },
+      methods: {
+        loadRecaptcha: function () {
+          var self = this;
+          return new Promise(function (resolve, reject) {
+            if (window.grecaptcha && window.grecaptcha.render) {
+              window.grecaptcha.ready(resolve);
+              return;
+            }
+            var existing = document.querySelector('script[data-demo-recaptcha="1"]');
+            if (existing) {
+              existing.addEventListener("load", function () {
+                window.grecaptcha.ready(resolve);
+              });
+              return;
+            }
+            var script = document.createElement("script");
+            script.src = "https://www.google.com/recaptcha/api.js?render=explicit&hl=vi";
+            script.async = true;
+            script.defer = true;
+            script.setAttribute("data-demo-recaptcha", "1");
+            script.onload = function () {
+              window.grecaptcha.ready(resolve);
+            };
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        },
+        renderWidget: function () {
+          var el = document.getElementById("recaptcha-container");
+          if (!el || this.widgetId !== null) return;
+          this.widgetId = window.grecaptcha.render(el, {
+            sitekey: this.siteKey,
+            theme: "dark",
+          });
+        },
+        getToken: function () {
+          if (!this.recaptchaEnabled || !this.siteKey) return "";
+          if (this.widgetId === null) return "";
+          return window.grecaptcha.getResponse(this.widgetId) || "";
+        },
+        resetCaptcha: function () {
+          if (this.widgetId !== null && window.grecaptcha) {
+            window.grecaptcha.reset(this.widgetId);
+          }
+        },
+        submit: function () {
+          var self = this;
+          self.message = "";
+          if (!self.to || !self.subject || !self.body) {
+            self.messageOk = false;
+            self.message = "Điền đủ To / Subject / Body.";
+            return;
+          }
+          var token = self.getToken();
+          if (self.recaptchaEnabled && self.siteKey && !token) {
+            self.messageOk = false;
+            self.message = "Hãy tick reCAPTCHA trước khi gửi.";
+            return;
+          }
+
+          self.sending = true;
+          fetch(GATEWAY + "/api/demo/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: self.to,
+              subject: self.subject,
+              body: self.body,
+              recaptchaToken: token,
+            }),
+          })
+            .then(function (r) {
+              return r.json().then(function (data) {
+                return { status: r.status, data: data };
+              });
+            })
+            .then(function (res) {
+              self.sending = false;
+              self.resetCaptcha();
+              if (res.data && res.data.ok) {
+                self.messageOk = true;
+                self.message =
+                  "Đã publish JetStream. MessageId=" +
+                  res.data.messageId +
+                  " — xem MailDev http://127.0.0.1:1080";
+              } else {
+                self.messageOk = false;
+                self.message = (res.data && res.data.error) || ("HTTP " + res.status);
+              }
+            })
+            .catch(function (err) {
+              self.sending = false;
+              self.resetCaptcha();
+              self.messageOk = false;
+              self.message = String(err);
+            });
+        },
+      },
+    });
+  </script>
+</body>
+</html>
