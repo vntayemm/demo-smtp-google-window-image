@@ -129,6 +129,22 @@
         <label for="body">Body (HTML ok)</label>
         <textarea id="body" v-model="body" placeholder="<p>Hello from demo</p>"></textarea>
       </div>
+      <div class="field">
+        <label for="count">Số message (perf test, max {{ maxSendCount }})</label>
+        <input
+          id="count"
+          v-model.number="count"
+          type="number"
+          min="1"
+          :max="maxSendCount"
+          step="1"
+        />
+        <div class="meta" style="margin-top:6px">
+          Gợi ý: <a href="#" style="color:#8ec7ff" @click.prevent="count = 1">1</a>
+          · <a href="#" style="color:#8ec7ff" @click.prevent="count = 100">100</a>
+          · <a href="#" style="color:#8ec7ff" @click.prevent="count = 1000">1000</a>
+        </div>
+      </div>
 
       <div class="captcha-box">
         <div v-if="!configLoaded" class="meta">Đang tải config…</div>
@@ -138,7 +154,7 @@
       </div>
 
       <button type="button" :disabled="sending" @click="submit">
-        {{ sending ? 'Đang gửi…' : 'Gửi email demo' }}
+        {{ sending ? ('Đang publish ' + count + '…') : ('Gửi ' + count + ' email demo') }}
       </button>
 
       <div v-if="message" :class="['msg', messageOk ? 'ok' : 'err']">{{ message }}</div>
@@ -160,9 +176,11 @@
       data: function () {
         return {
           gatewayBase: GATEWAY,
-          to: "",
+          to: "phuminh88@gmail.com",
           subject: "Demo SMTP via NATS",
           body: "<p>Xin chào — mail demo từ Vue 2 + reCAPTCHA + JetStream.</p>",
+          count: 1,
+          maxSendCount: 5000,
           configLoaded: false,
           recaptchaEnabled: true,
           siteKey: "",
@@ -179,6 +197,7 @@
           .then(function (cfg) {
             self.recaptchaEnabled = !!cfg.recaptchaEnabled;
             self.siteKey = cfg.siteKey || "";
+            if (cfg.maxSendCount) self.maxSendCount = cfg.maxSendCount;
             self.configLoaded = true;
             if (self.recaptchaEnabled && self.siteKey) {
               self.loadRecaptcha().then(function () {
@@ -245,6 +264,18 @@
             self.message = "Điền đủ To / Subject / Body.";
             return;
           }
+          var n = Number(self.count);
+          if (!Number.isFinite(n) || n < 1) {
+            self.messageOk = false;
+            self.message = "Số message phải ≥ 1.";
+            return;
+          }
+          if (n > self.maxSendCount) {
+            self.messageOk = false;
+            self.message = "Số message tối đa " + self.maxSendCount + ".";
+            return;
+          }
+          self.count = Math.floor(n);
           var token = self.getToken();
           if (self.recaptchaEnabled && self.siteKey && !token) {
             self.messageOk = false;
@@ -261,6 +292,7 @@
               subject: self.subject,
               body: self.body,
               recaptchaToken: token,
+              count: self.count,
             }),
           })
             .then(function (r) {
@@ -273,10 +305,22 @@
               self.resetCaptcha();
               if (res.data && res.data.ok) {
                 self.messageOk = true;
+                var rate =
+                  res.data.elapsedMs > 0
+                    ? ((res.data.published || 0) / (res.data.elapsedMs / 1000)).toFixed(1)
+                    : "n/a";
                 self.message =
-                  "Đã publish JetStream. MessageId=" +
-                  res.data.messageId +
-                  " — xem MailDev http://127.0.0.1:1080";
+                  "Published " +
+                  (res.data.published || 0) +
+                  "/" +
+                  (res.data.count || self.count) +
+                  " → JetStream trong " +
+                  (res.data.elapsedMs || 0) +
+                  " ms (~" +
+                  rate +
+                  " msg/s). batch=" +
+                  (res.data.batchId || res.data.messageId) +
+                  " — MailDev http://127.0.0.1:1080 · Jaeger demo-gateway";
               } else {
                 self.messageOk = false;
                 self.message = (res.data && res.data.error) || ("HTTP " + res.status);

@@ -8,7 +8,7 @@
 | Role | Env | Giá trị |
 | ---- | --- | ------- |
 | Frontend (Site key) | `RECAPTCHA_SITE_KEY` | `6Le_34otAAAAAKt2gmK8RIR-amPBcRHgJxcDgw9F` |
-| Backend (Secret key) | `RECAPTCHA_SECRET_KEY` | `6Le_34otAAAAANVEAaHJRmYDbE5-Oy32cS36Dou` |
+| Backend (Secret key) | `RECAPTCHA_SECRET_KEY` | `6Le_34otAAAAANVEAaHJRRmYDbE5-Oy32cS36Dou` |
 
 - Site key: Vue / Blazor widget (`grecaptcha`).
 - Secret key: chỉ `recaptcha-service` / ServiceAuth → `https://www.google.com/recaptcha/api/siteverify`.

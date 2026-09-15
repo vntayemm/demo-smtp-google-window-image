@@ -40,10 +40,17 @@ export interface GatewaySendEmailRequest {
   subject: string;
   body: string;
   recaptchaToken: string;
+  /** Số message publish JetStream (perf test). Default 1, max GATEWAY_MAX_SEND_COUNT. */
+  count?: number;
 }
 
 export interface GatewaySendEmailResponse {
   ok: boolean;
   messageId?: string;
+  /** Batch id / first message id */
+  batchId?: string;
+  count?: number;
+  published?: number;
+  elapsedMs?: number;
   error?: string;
 }

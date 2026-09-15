@@ -25,6 +25,33 @@ import { headers as natsHeaders } from "nats";
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
 
+const MAX_SEND_COUNT = Number(process.env.GATEWAY_MAX_SEND_COUNT || "5000");
+const PUBLISH_CONCURRENCY = Number(process.env.GATEWAY_PUBLISH_CONCURRENCY || "50");
+
+function clampCount(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 1) {
+    return 1;
+  }
+  return Math.min(Math.floor(n), MAX_SEND_COUNT);
+}
+
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      await worker(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
+
 async function main(): Promise<void> {
   await initTracing(process.env.OTEL_SERVICE_NAME || "demo-gateway");
 
@@ -34,7 +61,7 @@ async function main(): Promise<void> {
 
   const app = express();
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -42,6 +69,7 @@ async function main(): Promise<void> {
       nats: nc.getServer(),
       siteKeyConfigured: Boolean(process.env.RECAPTCHA_SITE_KEY),
       jaegerUi: "http://127.0.0.1:16686",
+      maxSendCount: MAX_SEND_COUNT,
     });
   });
 
@@ -50,6 +78,7 @@ async function main(): Promise<void> {
       recaptchaEnabled: (process.env.RECAPTCHA_ENABLED || "true").toLowerCase() === "true",
       siteKey: process.env.RECAPTCHA_SITE_KEY || "",
       jaegerUi: "http://127.0.0.1:16686",
+      maxSendCount: MAX_SEND_COUNT,
     });
   });
 
@@ -59,6 +88,7 @@ async function main(): Promise<void> {
       (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
       req.socket.remoteAddress ||
       undefined;
+    const count = clampCount(body.count);
 
     if (!body?.to?.trim() || !body?.subject?.trim() || !body?.body?.trim()) {
       const fail: GatewaySendEmailResponse = {
@@ -79,6 +109,7 @@ async function main(): Promise<void> {
           "http.route": "/api/demo/send-email",
           "messaging.system": "nats",
           "enduser.ip": remoteIp || "",
+          "demo.send.count": count,
         },
         async (rootSpan) => {
           const verifyReq: RecaptchaVerifyRequest = {
@@ -108,49 +139,76 @@ async function main(): Promise<void> {
 
           if (!verify.success) {
             rootSpan.setAttribute("recaptcha.success", false);
+            const detail = verify.errorCodes?.length
+              ? `reCAPTCHA rejected (${verify.errorCodes.join(",")})`
+              : verify.message || "reCAPTCHA failed";
             return {
               status: 400,
               body: {
                 ok: false,
-                error: verify.message || "reCAPTCHA failed",
+                error: detail,
               } satisfies GatewaySendEmailResponse,
             };
           }
 
           rootSpan.setAttribute("recaptcha.success", true);
-          const messageId = crypto.randomUUID();
-          const payload: EmailSendPayload = {
-            messageId,
-            to: body.to.trim(),
-            subject: body.subject.trim(),
-            html: body.body,
-            type: "demo.send",
-            source: "gateway",
-          };
+          const batchId = crypto.randomUUID();
+          const started = Date.now();
+          const indexes = Array.from({ length: count }, (_, i) => i);
 
           await runWithSpan(
             "demo-gateway",
-            "jetstream.publish email.send",
+            `jetstream.publish email.send x${count}`,
             SpanKind.PRODUCER,
             {
               "messaging.system": "nats",
               "messaging.destination": Subjects.EmailSend,
               "messaging.operation": "publish",
-              "messaging.message.id": messageId,
+              "demo.batch_id": batchId,
+              "demo.send.count": count,
             },
             async () => {
-              const hdr = injectTraceHeaders(natsHeaders());
-              hdr.set("Nats-Msg-Id", messageId);
-              await js.publish(Subjects.EmailSend, encodeJson(payload), {
-                headers: hdr,
+              await mapPool(indexes, PUBLISH_CONCURRENCY, async (i) => {
+                const messageId = `${batchId}-${i + 1}`;
+                const payload: EmailSendPayload = {
+                  messageId,
+                  to: body.to.trim(),
+                  subject:
+                    count === 1
+                      ? body.subject.trim()
+                      : `${body.subject.trim()} [${i + 1}/${count}]`,
+                  html:
+                    count === 1
+                      ? body.body
+                      : `${body.body}<p data-demo-seq="${i + 1}">#${i + 1} / batch ${batchId}</p>`,
+                  type: "demo.send",
+                  source: "gateway",
+                };
+                const hdr = injectTraceHeaders(natsHeaders());
+                hdr.set("Nats-Msg-Id", messageId);
+                hdr.set("X-Batch-Id", batchId);
+                await js.publish(Subjects.EmailSend, encodeJson(payload), {
+                  headers: hdr,
+                });
               });
             }
           );
 
-          rootSpan.setAttribute("email.message_id", messageId);
+          const elapsedMs = Date.now() - started;
+          rootSpan.setAttribute("email.batch_id", batchId);
+          rootSpan.setAttribute("email.published", count);
+          rootSpan.setAttribute("email.elapsed_ms", elapsedMs);
+
           return {
             status: 200,
-            body: { ok: true, messageId } satisfies GatewaySendEmailResponse,
+            body: {
+              ok: true,
+              messageId: `${batchId}-1`,
+              batchId,
+              count,
+              published: count,
+              elapsedMs,
+            } satisfies GatewaySendEmailResponse,
           };
         }
       );
@@ -158,7 +216,8 @@ async function main(): Promise<void> {
       res.status(result.status).json(result.body);
       if (result.body.ok) {
         console.log(
-          `[gateway] published email.send MessageId=${result.body.messageId} To=${body.to}`
+          `[gateway] published ${result.body.published}/${result.body.count} ` +
+            `batch=${result.body.batchId} elapsedMs=${result.body.elapsedMs} To=${body.to}`
         );
       }
     } catch (err) {
@@ -172,6 +231,9 @@ async function main(): Promise<void> {
   const port = Number(process.env.GATEWAY_PORT || "7080");
   app.listen(port, () => {
     console.log(`[gateway] http://127.0.0.1:${port}`);
+    console.log(
+      `[gateway] maxSendCount=${MAX_SEND_COUNT} publishConcurrency=${PUBLISH_CONCURRENCY}`
+    );
     console.log(`[gateway] Jaeger UI http://127.0.0.1:16686`);
   });
 }

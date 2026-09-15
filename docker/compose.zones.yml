@@ -1,11 +1,8 @@
 # =============================================================================
 # Compose project name: zones
-# Tạo 4 zone mạng kiểu DMZ (không chạy service).
-# =============================================================================
-# Windows containers → DOCKER_NETWORK_DRIVER=nat
-# Linux engine (Docker Desktop) → DOCKER_NETWORK_DRIVER=bridge (default)
-#
-#   npm run docker:zones:up
+# Tạo 4 zone mạng kiểu DMZ.
+# Prefer: npm run docker:zones:up  →  node docker/scripts/ensure-zones.js
+# Fallback: file này có service noop để `docker compose up` không báo "no service selected".
 # =============================================================================
 
 name: zones
@@ -38,3 +35,12 @@ networks:
     labels:
       demo.zone: data
       demo.role: data-tier
+
+services:
+  # No-op: chỉ để `compose up` tạo networks (không publish port).
+  zone-init:
+    image: alpine:3.20
+    container_name: zones-init
+    command: ["true"]
+    networks: [zone-frontend, zone-backend, zone-platform, zone-data]
+    restart: "no"
