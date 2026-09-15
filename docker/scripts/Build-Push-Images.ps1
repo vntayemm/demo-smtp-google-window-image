@@ -86,24 +86,24 @@ function Invoke-DockerBuild {
   $dockerArgs += $Svc.Context
 
   Write-Host "`n=== BUILD $($Svc.Name) -> $imageTag ===" -ForegroundColor Cyan
+  # Do not capture docker stdout (would pollute return value / $built)
   & docker @dockerArgs
   if ($LASTEXITCODE -ne 0) { throw "docker build failed: $($Svc.Name)" }
-  return $imageTag
 }
 
 function Invoke-DockerPush {
   param([string]$Image)
   Write-Host "=== PUSH $Image ===" -ForegroundColor Green
-  docker push $Image
+  & docker push $Image
   if ($LASTEXITCODE -ne 0) { throw "docker push failed: $Image" }
 }
 
-$built = @()
+$built = [System.Collections.Generic.List[string]]::new()
 foreach ($svc in $services) {
-  $img = Invoke-DockerBuild -Svc $svc
-  $built += $img
+  Invoke-DockerBuild -Svc $svc
+  [void]$built.Add("$ImageBase/$($svc.Name):$Tag")
   if ($AlsoLatest) {
-    $built += "$ImageBase/$($svc.Name):latest"
+    [void]$built.Add("$ImageBase/$($svc.Name):latest")
   }
 }
 

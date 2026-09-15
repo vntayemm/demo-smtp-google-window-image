@@ -1,44 +1,35 @@
-# escape=`
 # Windows container - build from repo root (Switch to Windows containers first).
 # Official library/node has no Windows tags; install Node onto Server Core.
 # Default base matches Win10 Hyper-V hosts (ltsc2019). Override for Server 2022:
 #   --build-arg WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2022
 ARG WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2019
-ARG NODE_VERSION=20.18.1
 ARG SERVICE=gateway
+ARG NODE_VERSION=20.18.1
 
 FROM ${WINDOWS_BASE} AS nodebase
-ARG NODE_VERSION
-SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference='Stop';"]
-RUN New-Item -ItemType Directory -Force -Path C:\nodejs | Out-Null; `
-    $url = "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip"; `
-    Write-Host "Downloading $url"; `
-    Invoke-WebRequest -Uri $url -OutFile C:\node.zip; `
-    Expand-Archive -Path C:\node.zip -DestinationPath C:\nodejs-tmp -Force; `
-    Copy-Item -Path "C:\nodejs-tmp\node-v$env:NODE_VERSION-win-x64\*" -Destination C:\nodejs -Recurse -Force; `
-    Remove-Item C:\node.zip, C:\nodejs-tmp -Recurse -Force
+ARG NODE_VERSION=20.18.1
+ENV NODE_VERSION=${NODE_VERSION}
+COPY docker/scripts/Install-Node.ps1 C:/Install-Node.ps1
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\Install-Node.ps1
 ENV PATH="C:\\nodejs;C:\\Windows\\System32;C:\\Windows"
 
 FROM nodebase AS build
-WORKDIR C:\app
+WORKDIR C:\\app
 COPY package.json package-lock.json ./
 COPY tsconfig.base.json ./
-COPY backend .\backend
-COPY frontend .\frontend
-RUN npm ci
-RUN npm run build -w @demo/shared `
- && npm run build -w @demo/gateway `
- && npm run build -w @demo/recaptcha-service `
- && npm run build -w @demo/smtp-service
+COPY backend ./backend
+COPY frontend ./frontend
+RUN npm.cmd ci
+RUN npm.cmd run build -w @demo/shared && npm.cmd run build -w @demo/gateway && npm.cmd run build -w @demo/recaptcha-service && npm.cmd run build -w @demo/smtp-service
 
 FROM nodebase AS runtime
-WORKDIR C:\app
+WORKDIR C:\\app
 ENV NODE_ENV=production
-COPY --from=build C:\app\package.json C:\app\package-lock.json ./
-COPY --from=build C:\app\node_modules .\node_modules
-COPY --from=build C:\app\backend .\backend
+COPY --from=build C:/app/package.json C:/app/package-lock.json ./
+COPY --from=build C:/app/node_modules ./node_modules
+COPY --from=build C:/app/backend ./backend
 ARG SERVICE=gateway
 ENV SERVICE=${SERVICE}
-WORKDIR C:\app\backend\${SERVICE}
+WORKDIR C:\\app\\backend\\${SERVICE}
 EXPOSE 7080
 CMD ["node", "dist/index.js"]

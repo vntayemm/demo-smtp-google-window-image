@@ -13,7 +13,7 @@ networks:
 
 services:
   web:
-    isolation: ${WINDOWS_ISOLATION:-process}
+    isolation: ${WINDOWS_ISOLATION:-hyperv}
     container_name: frontend-web
     build:
       context: ..

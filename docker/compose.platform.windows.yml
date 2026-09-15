@@ -1,0 +1,28 @@
+# =============================================================================
+# Compose project name: platform (Windows containers)
+# MailDev/Jaeger official images = Linux-only.
+# Demo Windows dùng CMIT SMTP relay + tắt OTEL (xem .env OTEL_ENABLED=false).
+# Stub giữ zone-platform có ít nhất 1 container để inspect network.
+# =============================================================================
+
+name: platform
+
+networks:
+  zone-platform:
+    external: true
+    name: zone-platform
+
+services:
+  platform-stub:
+    isolation: ${WINDOWS_ISOLATION:-hyperv}
+    image: mcr.microsoft.com/windows/servercore:ltsc2019
+    container_name: platform-stub
+    restart: unless-stopped
+    networks: [zone-platform]
+    command:
+      [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Write-Host 'platform-stub: MailDev/Jaeger N/A on Windows engine; SMTP=EMAIL_HOST_DOCKER; OTEL off'; while ($$true) { Start-Sleep -Seconds 3600 }",
+      ]

@@ -1,0 +1,14 @@
+# Windows NATS Server — JetStream cluster member base
+ARG WINDOWS_BASE=mcr.microsoft.com/windows/servercore:ltsc2019
+ARG NATS_VERSION=2.10.25
+
+FROM ${WINDOWS_BASE}
+ARG NATS_VERSION=2.10.25
+ENV NATS_VERSION=${NATS_VERSION}
+COPY docker/scripts/Install-Nats.ps1 C:/Install-Nats.ps1
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\Install-Nats.ps1
+ENV PATH="C:\\nats;C:\\Windows\\System32;C:\\Windows"
+EXPOSE 4222 6222 8222
+VOLUME C:/data
+ENTRYPOINT ["nats-server.exe"]
+CMD ["-c", "C:\\nats\\nats.conf"]

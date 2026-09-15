@@ -1,0 +1,77 @@
+# =============================================================================
+# Compose project name: data (Windows containers)
+# Zone: zone-data — NATS ×3 JetStream cluster
+# Postgres demo app không dùng → bỏ (Linux-only image). Prod: PG native trên VLAN data.
+# Prerequisite: Switch to Windows containers + npm run docker:zones:up
+# Win10 Desktop: WINDOWS_ISOLATION=hyperv (process chỉ khi host khớp build)
+# =============================================================================
+
+name: data
+
+networks:
+  zone-data:
+    external: true
+    name: zone-data
+
+volumes:
+  data_nats1:
+  data_nats2:
+  data_nats3:
+
+x-nats: &nats
+  isolation: ${WINDOWS_ISOLATION:-hyperv}
+  image: demo-nats-windows:local
+  build:
+    context: ..
+    dockerfile: docker/nats/Dockerfile.windows
+    args:
+      WINDOWS_BASE: ${WINDOWS_BASE:-mcr.microsoft.com/windows/servercore:ltsc2019}
+  restart: unless-stopped
+  networks: [zone-data]
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "try { $$r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8222/varz; if ($$r.StatusCode -ne 200) { exit 1 } } catch { exit 1 }",
+      ]
+    interval: 10s
+    timeout: 10s
+    retries: 12
+    start_period: 20s
+
+services:
+  nats-1:
+    <<: *nats
+    container_name: data-nats-1
+    command: ["-c", "C:\\nats-config\\nats-1.conf"]
+    ports:
+      - "14222:4222"
+      - "18222:8222"
+    volumes:
+      - ./nats/windows:C:/nats-config:ro
+      - data_nats1:C:/data
+
+  nats-2:
+    <<: *nats
+    container_name: data-nats-2
+    command: ["-c", "C:\\nats-config\\nats-2.conf"]
+    ports:
+      - "14223:4222"
+      - "18223:8222"
+    volumes:
+      - ./nats/windows:C:/nats-config:ro
+      - data_nats2:C:/data
+
+  nats-3:
+    <<: *nats
+    container_name: data-nats-3
+    command: ["-c", "C:\\nats-config\\nats-3.conf"]
+    ports:
+      - "14224:4222"
+      - "18224:8222"
+    volumes:
+      - ./nats/windows:C:/nats-config:ro
+      - data_nats3:C:/data

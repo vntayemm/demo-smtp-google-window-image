@@ -41,8 +41,8 @@ x-common-env: &common-env
   # RECAPTCHA_* từ env_file ../.env — không interpolate rỗng vào environment
 
 x-windows: &windows
-  isolation: ${WINDOWS_ISOLATION:-process}
-  # platform: windows — bật khi Docker đang ở Windows container mode
+  # Win10 Desktop + servercore ltsc2019 → hyperv; Server cùng build có thể process
+  isolation: ${WINDOWS_ISOLATION:-hyperv}
 
 services:
   # Edge / reverse path từ DMZ frontend → app → data
