@@ -1,0 +1,83 @@
+# =============================================================================
+# Server Windows: pull backend (no build). Docker Hub naming:
+#   IMAGE_BASE=phuminh88/demo-smtp-win  →  phuminh88/demo-smtp-win-gateway:demo
+# Prerequisite: Switch to Windows containers + zones + data + platform host tools
+# =============================================================================
+
+name: backend
+
+networks:
+  zone-frontend:
+    external: true
+    name: zone-frontend
+  zone-backend:
+    external: true
+    name: zone-backend
+  zone-platform:
+    external: true
+    name: zone-platform
+  zone-data:
+    external: true
+    name: zone-data
+
+x-common-env: &common-env
+  NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+  NATS_JETSTREAM_REPLICAS: ${NATS_JETSTREAM_REPLICAS:-3}
+  OTEL_ENABLED: ${OTEL_ENABLED:-true}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+  EMAIL_HOST: ${EMAIL_HOST_DOCKER:-172.16.84.91}
+  EMAIL_PORT: ${EMAIL_PORT_DOCKER:-25}
+  EMAIL_ENABLE_SSL: ${EMAIL_ENABLE_SSL:-false}
+  EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-eport@cmit.com.vn}
+  EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-CMIT Portal}
+  POSTGRES_HOST: postgres-primary
+  POSTGRES_PORT: "5432"
+
+x-windows: &windows
+  isolation: ${WINDOWS_ISOLATION:-hyperv}
+
+services:
+  gateway:
+    <<: *windows
+    container_name: backend-gateway
+    image: ${IMAGE_BASE:-phuminh88/demo-smtp-win}-gateway:${IMAGE_TAG:-demo}
+    pull_policy: always
+    restart: unless-stopped
+    networks: [zone-frontend, zone-backend, zone-platform, zone-data]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-gateway
+      GATEWAY_PORT: "7080"
+    ports:
+      - "7080:7080"
+
+  recaptcha-service:
+    <<: *windows
+    container_name: backend-recaptcha-service
+    image: ${IMAGE_BASE:-phuminh88/demo-smtp-win}-recaptcha-service:${IMAGE_TAG:-demo}
+    pull_policy: always
+    restart: unless-stopped
+    networks: [zone-backend, zone-platform, zone-data]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-recaptcha-service
+
+  smtp-service:
+    <<: *windows
+    container_name: backend-smtp-service
+    image: ${IMAGE_BASE:-phuminh88/demo-smtp-win}-smtp-service:${IMAGE_TAG:-demo}
+    pull_policy: always
+    restart: unless-stopped
+    networks: [zone-backend, zone-platform, zone-data]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: demo-smtp-service

@@ -1,7 +1,12 @@
 # =============================================================================
 # Compose project name: platform (Windows containers)
-# MailDev/Jaeger official images = Linux-only.
-# Demo Windows dùng CMIT SMTP relay + tắt OTEL (xem .env OTEL_ENABLED=false).
+# MailDev / SMSDev / Jaeger official images = Linux-only → không chạy trên Windows engine.
+# Demo Windows — chạy trên host:
+#   .\docker\scripts\Start-Platform-Host.ps1
+#     Jaeger  http://127.0.0.1:16686  OTLP :4318
+#     MailDev http://127.0.0.1:1080   SMTP :1025
+#     SMSDev  http://127.0.0.1:4000   API  :4001
+# SMTP local catch: EMAIL_HOST=127.0.0.1 EMAIL_PORT=1025
 # Stub giữ zone-platform có ít nhất 1 container để inspect network.
 # =============================================================================
 
@@ -24,5 +29,5 @@ services:
         "powershell",
         "-NoProfile",
         "-Command",
-        "Write-Host 'platform-stub: MailDev/Jaeger N/A on Windows engine; SMTP=EMAIL_HOST_DOCKER; OTEL off'; while ($$true) { Start-Sleep -Seconds 3600 }",
+        "Write-Host 'platform-stub: use Start-Platform-Host.ps1 for Jaeger/MailDev/SMSDev on host'; while ($$true) { Start-Sleep -Seconds 3600 }",
       ]

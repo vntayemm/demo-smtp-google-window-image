@@ -1,0 +1,25 @@
+# Server Windows: pull frontend (no build)
+#   IMAGE_BASE=phuminh88/demo-smtp-win IMAGE_TAG=demo
+
+name: frontend
+
+networks:
+  zone-frontend:
+    external: true
+    name: zone-frontend
+
+services:
+  web:
+    isolation: ${WINDOWS_ISOLATION:-hyperv}
+    container_name: frontend-web
+    image: ${IMAGE_BASE:-phuminh88/demo-smtp-win}-frontend-web:${IMAGE_TAG:-demo}
+    pull_policy: always
+    restart: unless-stopped
+    networks: [zone-frontend]
+    environment:
+      DEMO_GATEWAY: ${DEMO_GATEWAY:-}
+      GATEWAY_PROXY_HOST: gateway
+      GATEWAY_PROXY_PORT: "7080"
+      PORT: "8080"
+    ports:
+      - "5173:8080"

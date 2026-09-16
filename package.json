@@ -42,8 +42,17 @@
     "image:build-push:windows": "node docker/scripts/build-push-images.js --platform windows --push",
     "image:build-push:ps1": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Build-Push-Images.ps1 -Push",
     "docker:pull:up": "docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml pull && docker compose --env-file .env -p backend -f docker/compose.backend.pull.yml up -d && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.yml pull && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.yml up -d",
+    "docker:data:windows:pull:up": "docker compose --env-file .env -p data -f docker/compose.data.windows.pull.yml pull && docker compose --env-file .env -p data -f docker/compose.data.windows.pull.yml up -d",
+    "docker:pull:up:windows": "docker compose --env-file .env -p backend -f docker/compose.backend.pull.windows.yml pull && docker compose --env-file .env -p backend -f docker/compose.backend.pull.windows.yml up -d && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.windows.yml pull && docker compose --env-file .env -p frontend -f docker/compose.frontend.pull.windows.yml up -d",
+    "image:push:dockerhub:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Push-DockerHub-Windows.ps1",
+    "image:build-push:dockerhub:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Build-Push-Images.ps1 -Platform windows -Push -IncludeNats",
+    "platform:host": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Start-Platform-Host.ps1",
+    "platform:host:maildev": "npx --yes maildev --web 1080 --smtp 1025 --ip 127.0.0.1",
+    "platform:host:smsdev": "npx --yes @relay-works/sms-dev start --ui-port 4000 --api-port 4001",
+    "platform:host:jaeger": "powershell -NoProfile -ExecutionPolicy Bypass -File docker/scripts/Start-Jaeger-Host.ps1",
     "env:dev": "node -e \"require('fs').copyFileSync('.env.example','.env'); console.log('Wrote .env from .env.example (MailDev)')\"",
-    "env:production": "node -e \"require('fs').copyFileSync('.env.production.example','.env'); console.log('Wrote .env from .env.production.example (CMIT relay)')\""
+    "env:production": "node -e \"require('fs').copyFileSync('.env.production.example','.env'); console.log('Wrote .env from .env.production.example (CMIT relay)')\"",
+    "env:dockerhub": "node -e \"require('fs').copyFileSync('.env.dockerhub.example','.env'); console.log('Wrote .env from .env.dockerhub.example')\""
   },
   "engines": {
     "node": ">=18"

@@ -3,6 +3,8 @@
 > Label Google: **CMIT - Customer Portal** · loại **v2 Checkbox**  
 > Dùng **cùng một cặp khoá** cho Dev và Production (demo + CMIT-CP).
 
+> **FE/BE notes + sơ đồ luồng:** [RECAPTCHA-FE-BE-NOTES.md](./RECAPTCHA-FE-BE-NOTES.md)
+
 ## Keys
 
 | Role | Env | Giá trị |
